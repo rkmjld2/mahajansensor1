@@ -1,0 +1,29 @@
+git clone https://github.com/rkmjld2/mahajanravi2c.git
+git clone https://github.com/rkmjld2/mahajanclud.git
+git pull origin main
+git add .
+git commit -m "Fix imports and embeddings"
+git push
+
+/////////////
+error with command   git commit -m "Fix imports and embeddings"
+(env_langchain) C:\Users\Ravi Mahajan\streamlit_program\mahajancrud>git commit -m "Your commit message"
+Author identity unknown
+
+*** Please tell me who you are.
+
+Run
+
+  git config --global user.email "you@example.com"
+  git config --global user.name "Your Name"
+
+to set your account's default identity.
+Omit --global to set the identity only in this repository.
+
+fatal: unable to auto-detect email address (got 'Ravi Mahajan@Ravi.(none)')
+
+
+
+//////// rectified by running the below command first  then git commit -m "Fix imports and embeddings"
+git config --global user.name "Ravi Mahajan"
+git config --global user.email "rkmjld@gmail.com"
