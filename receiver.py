@@ -46,7 +46,7 @@ if temperature and humidity and received_key:
             conn = get_connection()
             with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO readings (temperature, humidity, device_id, created_at)
+                    INSERT INTO sensor_db (temperature, humidity, device_id, created_at)
                     VALUES (%s, %s, %s, NOW())
                 """, (temp, hum, device_id))
             conn.close()
