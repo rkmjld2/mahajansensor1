@@ -6,21 +6,23 @@ import pandas as pd
 st.set_page_config(page_title="ESP8266 Dashboard", layout="wide")
 st.title("📡 ESP8266 → TiDB Sensor Dashboard")
 
-# ================= DB CONNECTION =================
-@st.cache_resource(ttl=600)
+# ================= DB CONNECTION (FINAL FIX) =================
 def get_connection():
     try:
-        secrets = st.secrets.get("tidb", {})
+        secrets = st.secrets["tidb"]
+
         conn = pymysql.connect(
-            host=secrets.get("host"),
-            port=int(secrets.get("port", 4000)),
-            user=secrets.get("user"),
-            password=secrets.get("password"),
-            database=secrets.get("database", "sensor"),
+            host=secrets["host"],
+            port=int(secrets["port"]),
+            user=secrets["user"],
+            password=secrets["password"],
+            database=secrets["database"],
             ssl={'ca': None},
-            cursorclass=pymysql.cursors.DictCursor
+            cursorclass=pymysql.cursors.DictCursor,
+            autocommit=True   # ✅ VERY IMPORTANT
         )
         return conn
+
     except Exception as e:
         st.error(f"❌ DB Connection Error: {e}")
         return None
@@ -41,7 +43,7 @@ if st.button("🔍 Test DB"):
         st.error("❌ Connection Failed")
 
 # =====================================================
-# ================= RECEIVER (ESP8266) =================
+# ================= RECEIVER ===========================
 # =====================================================
 st.subheader("📨 ESP8266 Receiver")
 
@@ -56,26 +58,16 @@ if None not in (s1, s2, s3, key):
 
     if key == SECRET_KEY:
         try:
-            sensor1 = float(s1)
-            sensor2 = float(s2)
-            sensor3 = float(s3)
-
             conn = get_connection()
 
             if conn:
-                cur = conn.cursor()
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO sensor_db (sensor1, sensor2, sensor3) VALUES (%s, %s, %s)",
+                        (float(s1), float(s2), float(s3))
+                    )
 
-                # INSERT DATA
-                cur.execute(
-                    "INSERT INTO sensor_db (sensor1, sensor2, sensor3) VALUES (%s, %s, %s)",
-                    (sensor1, sensor2, sensor3)
-                )
-
-                conn.commit()
-
-                cur.close()
                 conn.close()
-
                 st.success("✅ Data Received & Stored")
 
         except Exception as e:
@@ -108,7 +100,7 @@ if conn:
             # FORMAT TIMESTAMP
             df['timestamp'] = pd.to_datetime(df['timestamp'])
 
-            # SHOW TABLE
+            # DISPLAY TABLE
             st.dataframe(df, use_container_width=True)
 
             # METRICS
