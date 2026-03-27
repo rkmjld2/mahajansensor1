@@ -1,15 +1,12 @@
 import streamlit as st
 import pymysql
 import pandas as pd
-from datetime import datetime
 
 st.set_page_config(page_title="ESP8266 Sensor Dashboard", layout="wide")
 st.title("🔐 ESP8266 → TiDB Live Dashboard")
 
 # ====================== CONNECTION ======================
-@st.cache_resource(ttl=600)
-def get_connection():
-    """Safe TiDB connection"""
+def get_connection():   # ❌ removed cache
     try:
         secrets = st.secrets.get("tidb", {})
         conn = pymysql.connect(
@@ -20,14 +17,19 @@ def get_connection():
             database=secrets.get("database", "sensor"),
             ssl={'ca': None},
             charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor
+            cursorclass=pymysql.cursors.DictCursor,
+            autocommit=True   # ✅ IMPORTANT
         )
         return conn
     except Exception as e:
         st.error(f"❌ Connection: {e}")
         return None
 
-SECRET_KEY = st.secrets.get("security", {}).get("secret_key", "12b5112c62284ea0b3da0039f298ec7a85ac9a1791044052b6df970640afb1c5")
+
+SECRET_KEY = st.secrets.get("security", {}).get(
+    "secret_key",
+    "12b5112c62284ea0b3da0039f298ec7a85ac9a1791044052b6df970640afb1c5"
+)
 
 # ====================== TEST BUTTON ======================
 col1, col2 = st.columns([1,3])
@@ -41,15 +43,15 @@ with col1:
                 st.success("✅ Connected!")
                 cur.close()
                 conn.close()
-            except:
-                st.error("❌ Test failed")
+            except Exception as e:
+                st.error(f"❌ Test failed: {e}")
         else:
             st.error("❌ No connection")
 
 # ====================== RECEIVE DATA ======================
 st.subheader("📨 ESP8266 Receiver")
-params = st.query_params
 
+params = st.query_params
 s1 = params.get("s1")
 s2 = params.get("s2")
 s3 = params.get("s3")
@@ -65,68 +67,60 @@ if s1 and s2 and s3 and received_key:
             conn = get_connection()
             if conn:
                 cur = conn.cursor()
-                cur.execute("INSERT INTO sensor_db (sensor1, sensor2, sensor3) VALUES (%s,%s,%s)", 
-                           (sensor1, sensor2, sensor3))
-                conn.commit()
+
+                cur.execute(
+                    "INSERT INTO sensor_db (sensor1, sensor2, sensor3) VALUES (%s,%s,%s)",
+                    (sensor1, sensor2, sensor3)
+                )
+
                 cur.close()
                 conn.close()
-                
-                col1, col2, col3 = st.columns(3)
-                col1.metric("S1", sensor1)
-                col2.metric("S2", sensor2)
-                col3.metric("S3", sensor3)
+
                 st.success("✅ Saved!")
-                st.balloons()
-                st.rerun()
+                st.write(f"S1={sensor1}, S2={sensor2}, S3={sensor3}")
+
             else:
                 st.error("❌ No DB")
+
         except Exception as e:
-            st.error(f"❌ Save: {e}")
+            st.error(f"❌ Save Error: {e}")
     else:
         st.error("🚫 Bad Key")
 else:
-    st.info("**URL**: `?s1=25&s2=60&s3=512&key=12b5112c62284ea0...`")
+    st.info("Use URL: ?s1=25&s2=60&s3=512&key=YOUR_KEY")
 
 # ====================== DASHBOARD ======================
-# Replace DASHBOARD section with this:
 st.subheader("📊 Live Data")
-conn = get_connection()
-if conn:
-    try:
-        df = pd.read_sql("SELECT * FROM sensor_db ORDER BY id DESC LIMIT 50", conn)
+
+try:
+    conn = get_connection()
+
+    if conn:
+        df = pd.read_sql(
+            "SELECT id, sensor1, sensor2, sensor3, timestamp FROM sensor_db ORDER BY id DESC LIMIT 50",
+            conn
+        )
         conn.close()
-        
-        st.write(f"**Found {len(df)} records**")  # DEBUG
-        
-        if len(df) == 0:
-            st.warning("📭 **EMPTY TABLE** - Send data first!")
+
+        st.write(f"**Found {len(df)} records**")
+
+        if df.empty:
+            st.warning("📭 EMPTY TABLE")
         else:
-            # Safe conversion + check
+            # Convert to numeric safely
             for col in ['sensor1', 'sensor2', 'sensor3']:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-                    st.write(f"**{col}**: {len(df[df[col].notna()])} valid numbers")  # DEBUG
-            
-            st.dataframe(df)
-            
-            # Safe metrics - skip if no valid data
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            st.dataframe(df, use_container_width=True)
+
             col1, col2, col3 = st.columns(3)
-            if 'sensor1' in df and df['sensor1'].notna().sum() > 0:
-                col1.metric("Avg S1", f"{df['sensor1'].mean():.1f}")
-            else:
-                col1.metric("Avg S1", "No data")
-                
-            if 'sensor2' in df and df['sensor2'].notna().sum() > 0:
-                col2.metric("Avg S2", f"{df['sensor2'].mean():.1f}")
-            else:
-                col2.metric("Avg S2", "No data")
-                
-            if 'sensor3' in df and df['sensor3'].notna().sum() > 0:
-                col3.metric("Avg S3", f"{df['sensor3'].mean():.0f}")
-            else:
-                col3.metric("Avg S3", "No data")
-            
-    except Exception as e:
-        st.error(f"❌ Query: {e}")
-else:
-    st.error("No connection")
+
+            col1.metric("Avg S1", f"{df['sensor1'].mean():.2f}" if df['sensor1'].notna().any() else "No data")
+            col2.metric("Avg S2", f"{df['sensor2'].mean():.2f}" if df['sensor2'].notna().any() else "No data")
+            col3.metric("Avg S3", f"{df['sensor3'].mean():.2f}" if df['sensor3'].notna().any() else "No data")
+
+    else:
+        st.error("❌ No connection")
+
+except Exception as e:
+    st.error(f"❌ Query Error: {e}")
