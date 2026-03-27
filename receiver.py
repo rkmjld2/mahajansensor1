@@ -42,12 +42,14 @@ if st.button("🔍 Test DB"):
 # ====================== RECEIVE DATA ======================
 st.subheader("📨 ESP8266 Receiver")
 
-params = st.experimental_get_query_params()
+params = st.query_params
 
-s1 = params.get("s1", [None])[0]
-s2 = params.get("s2", [None])[0]
-s3 = params.get("s3", [None])[0]
-key = params.get("key", [None])[0]
+s1 = params.get("s1")
+s2 = params.get("s2")
+s3 = params.get("s3")
+key = params.get("key")
+
+st.write("DEBUG:", s1, s2, s3, key)
 
 # Debug (you can remove later)
 st.write("DEBUG:", s1, s2, s3, key)
