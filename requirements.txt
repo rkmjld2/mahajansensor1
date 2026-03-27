@@ -2,3 +2,5 @@ streamlit
 pymysql
 pandas
 plotly
+flask
+gunicorn
