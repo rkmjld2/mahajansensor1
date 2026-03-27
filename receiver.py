@@ -88,6 +88,7 @@ else:
     st.info("**URL**: `?s1=25&s2=60&s3=512&key=12b5112c62284ea0...`")
 
 # ====================== DASHBOARD ======================
+# Replace DASHBOARD section with this:
 st.subheader("📊 Live Data")
 conn = get_connection()
 if conn:
@@ -95,25 +96,37 @@ if conn:
         df = pd.read_sql("SELECT * FROM sensor_db ORDER BY id DESC LIMIT 50", conn)
         conn.close()
         
-        if not df.empty:
-            # Safe numeric
-            for col in ['sensor1','sensor2','sensor3']:
-                if col in df:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-            
-            st.dataframe(df, use_container_width=True)
-            
-            col1,col2,col3 = st.columns(3)
-            col1.metric("Avg S1", f"{df.sensor1.mean():.1f}")
-            col2.metric("Avg S2", f"{df.sensor2.mean():.1f}")
-            col3.metric("Avg S3", f"{df.sensor3.mean():.0f}")
+        st.write(f"**Found {len(df)} records**")  # DEBUG
+        
+        if len(df) == 0:
+            st.warning("📭 **EMPTY TABLE** - Send data first!")
         else:
-            st.info("No data yet")
+            # Safe conversion + check
+            for col in ['sensor1', 'sensor2', 'sensor3']:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                    st.write(f"**{col}**: {len(df[df[col].notna()])} valid numbers")  # DEBUG
+            
+            st.dataframe(df)
+            
+            # Safe metrics - skip if no valid data
+            col1, col2, col3 = st.columns(3)
+            if 'sensor1' in df and df['sensor1'].notna().sum() > 0:
+                col1.metric("Avg S1", f"{df['sensor1'].mean():.1f}")
+            else:
+                col1.metric("Avg S1", "No data")
+                
+            if 'sensor2' in df and df['sensor2'].notna().sum() > 0:
+                col2.metric("Avg S2", f"{df['sensor2'].mean():.1f}")
+            else:
+                col2.metric("Avg S2", "No data")
+                
+            if 'sensor3' in df and df['sensor3'].notna().sum() > 0:
+                col3.metric("Avg S3", f"{df['sensor3'].mean():.0f}")
+            else:
+                col3.metric("Avg S3", "No data")
             
     except Exception as e:
-        st.error(f"❌ Read: {e}")
+        st.error(f"❌ Query: {e}")
 else:
-    st.warning("Connect first")
-
-st.markdown("---")
-st.caption(f"Updated: {datetime.now().strftime('%H:%M:%S')}")
+    st.error("No connection")
