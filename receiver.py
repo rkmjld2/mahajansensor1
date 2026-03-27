@@ -98,8 +98,10 @@ if conn:
             st.warning("📭 No data available")
         else:
             # FORMAT TIMESTAMP
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-
+            #df['timestamp'] = pd.to_datetime(df['timestamp'])
+            # FORMAT TIMESTAMP (SAFE)
+            df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+            df = df.dropna(subset=['timestamp'])
             # DISPLAY TABLE
             st.dataframe(df, use_container_width=True)
 
