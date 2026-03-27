@@ -5,7 +5,7 @@ import pandas as pd
 st.set_page_config(page_title="ESP8266 Sensor Dashboard", layout="wide")
 st.title("🔐 ESP8266 → TiDB Live Dashboard")
 
-# ====================== DB CONNECTION ======================
+# ====================== CONNECTION ======================
 def get_connection():
     try:
         conn = pymysql.connect(
@@ -29,7 +29,7 @@ def get_connection():
 SECRET_KEY = st.secrets["security"]["secret_key"]
 
 
-# ====================== TEST BUTTON ======================
+# ====================== TEST CONNECTION ======================
 if st.button("🔍 Test DB"):
     conn = get_connection()
     if conn:
@@ -49,12 +49,9 @@ s2 = params.get("s2")
 s3 = params.get("s3")
 key = params.get("key")
 
-st.write("DEBUG:", s1, s2, s3, key)
+st.write("DEBUG PARAMS:", s1, s2, s3, key)
 
-# Debug (you can remove later)
-st.write("DEBUG:", s1, s2, s3, key)
-
-if all([s1, s2, s3, key]):
+if None not in (s1, s2, s3, key):
 
     if key == SECRET_KEY:
         try:
@@ -62,11 +59,22 @@ if all([s1, s2, s3, key]):
             sensor2 = float(s2)
             sensor3 = float(s3)
 
+            st.write("Parsed:", sensor1, sensor2, sensor3)
+
             conn = get_connection()
 
             if conn:
                 cur = conn.cursor()
 
+                # 🔍 SHOW DB NAME
+                cur.execute("SELECT DATABASE()")
+                st.write("DB NAME:", cur.fetchone())
+
+                # 🔍 SHOW TABLES
+                cur.execute("SHOW TABLES")
+                st.write("TABLES:", cur.fetchall())
+
+                # 🔥 INSERT
                 cur.execute(
                     "INSERT INTO sensor_db (sensor1, sensor2, sensor3) VALUES (%s,%s,%s)",
                     (sensor1, sensor2, sensor3)
@@ -74,15 +82,15 @@ if all([s1, s2, s3, key]):
 
                 conn.commit()
 
-                # Show latest inserted row
-                cur.execute("SELECT * FROM sensor_db ORDER BY id DESC LIMIT 1")
-                latest = cur.fetchone()
-
-                st.success("✅ Data Saved Successfully")
-                st.write("Latest Record:", latest)
+                # 🔍 VERIFY INSERT
+                cur.execute("SELECT * FROM sensor_db ORDER BY id DESC LIMIT 5")
+                rows = cur.fetchall()
+                st.write("LATEST DATA:", rows)
 
                 cur.close()
                 conn.close()
+
+                st.success("✅ Data Saved Successfully")
 
         except Exception as e:
             st.error(f"❌ Insert Error: {e}")
@@ -91,7 +99,7 @@ if all([s1, s2, s3, key]):
         st.error("🚫 Invalid Key")
 
 else:
-    st.info("Send data using URL: ?s1=25&s2=60&s3=512&key=YOUR_KEY")
+    st.info("Use URL: ?s1=25&s2=60&s3=512&key=YOUR_KEY")
 
 
 # ====================== DASHBOARD ======================
@@ -107,25 +115,25 @@ try:
         )
         conn.close()
 
+        st.write(f"Total Records: {len(df)}")
+
         if df.empty:
-            st.warning("📭 No data available")
+            st.warning("📭 No data in table")
         else:
-            # Convert to numeric
-            df["sensor1"] = pd.to_numeric(df["sensor1"], errors="coerce")
-            df["sensor2"] = pd.to_numeric(df["sensor2"], errors="coerce")
-            df["sensor3"] = pd.to_numeric(df["sensor3"], errors="coerce")
+            # Convert safely
+            for col in ["sensor1", "sensor2", "sensor3"]:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
 
             st.dataframe(df, use_container_width=True)
 
-            # Metrics
             col1, col2, col3 = st.columns(3)
 
-            col1.metric("Avg Sensor 1", f"{df['sensor1'].mean():.2f}")
-            col2.metric("Avg Sensor 2", f"{df['sensor2'].mean():.2f}")
-            col3.metric("Avg Sensor 3", f"{df['sensor3'].mean():.2f}")
+            col1.metric("Avg S1", f"{df['sensor1'].mean():.2f}")
+            col2.metric("Avg S2", f"{df['sensor2'].mean():.2f}")
+            col3.metric("Avg S3", f"{df['sensor3'].mean():.2f}")
 
     else:
-        st.error("❌ Could not connect to DB")
+        st.error("❌ DB connection failed")
 
 except Exception as e:
     st.error(f"❌ Query Error: {e}")
