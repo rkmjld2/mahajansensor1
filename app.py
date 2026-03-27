@@ -47,7 +47,7 @@ st.title("ESP8266 Sensor Dashboard")
 
 conn = pymysql.connect(**DB_CONFIG)
 cursor = conn.cursor()
-cursor.execute("SELECT id, sensor1, sensor2, sensor3, ttimestamp FROM sensor_db ORDER BY id DESC LIMIT 10")
+cursor.execute("SELECT id, sensor1, sensor2, sensor3, timestamp FROM sensor_db ORDER BY id DESC LIMIT 10")
 rows = cursor.fetchall()
 cursor.close()
 conn.close()
