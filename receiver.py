@@ -5,83 +5,60 @@ import pandas as pd
 st.set_page_config(page_title="ESP8266 Sensor Dashboard", layout="wide")
 st.title("🔐 ESP8266 → TiDB Live Dashboard")
 
-# ====================== CONNECTION ======================
+# ====================== DB CONNECTION ======================
 def get_connection():
     try:
-        secrets = st.secrets.get("tidb", {})
         conn = pymysql.connect(
-            host=secrets.get("host", "gateway01.ap-southeast-1.prod.aws.tidbcloud.com"),
-            port=int(secrets.get("port", 4000)),
-            user=secrets.get("user", "ax6KHc1BNkyuaor.root"),
-            password=secrets.get("password", "EP8isIWoEOQk7DSr"),
-            database=secrets.get("database", "sensor"),
+            host=st.secrets["tidb"]["host"],
+            port=int(st.secrets["tidb"]["port"]),
+            user=st.secrets["tidb"]["user"],
+            password=st.secrets["tidb"]["password"],
+            database=st.secrets["tidb"]["database"],
             ssl={'ca': None},
             charset='utf8mb4',
             cursorclass=pymysql.cursors.DictCursor,
-            autocommit=True   # ✅ IMPORTANT
+            autocommit=True
         )
         return conn
     except Exception as e:
-        st.error(f"❌ Connection Error: {e}")
+        st.error(f"❌ DB Connection Error: {e}")
         return None
 
 
 # ====================== SECRET KEY ======================
-SECRET_KEY = st.secrets.get(
-    "security", {}
-).get(
-    "secret_key",
-    "12b5112c62284ea0b3da0039f298ec7a85ac9a1791044052b6df970640afb1c5"
-)
+SECRET_KEY = st.secrets["security"]["secret_key"]
+
 
 # ====================== TEST BUTTON ======================
-col1, col2 = st.columns([1, 3])
-
-with col1:
-    if st.button("🔍 Test DB", use_container_width=True):
-        conn = get_connection()
-        if conn:
-            try:
-                cur = conn.cursor()
-                cur.execute("SELECT 1")
-                st.success("✅ Connected!")
-                cur.close()
-                conn.close()
-            except Exception as e:
-                st.error(f"❌ Test failed: {e}")
-        else:
-            st.error("❌ No connection")
-
-
-# ====================== SAFE PARAM FUNCTION ======================
-def get_param(p):
-    if isinstance(p, list):
-        return p[0]
-    return p
+if st.button("🔍 Test DB"):
+    conn = get_connection()
+    if conn:
+        st.success("✅ Database Connected")
+        conn.close()
+    else:
+        st.error("❌ Connection Failed")
 
 
 # ====================== RECEIVE DATA ======================
 st.subheader("📨 ESP8266 Receiver")
 
-params = st.query_params
+params = st.experimental_get_query_params()
 
-s1 = get_param(params.get("s1"))
-s2 = get_param(params.get("s2"))
-s3 = get_param(params.get("s3"))
-received_key = get_param(params.get("key"))
+s1 = params.get("s1", [None])[0]
+s2 = params.get("s2", [None])[0]
+s3 = params.get("s3", [None])[0]
+key = params.get("key", [None])[0]
 
-# 🔍 DEBUG (you can remove later)
-st.write("DEBUG PARAMS:", s1, s2, s3, received_key)
+# Debug (you can remove later)
+st.write("DEBUG:", s1, s2, s3, key)
 
-if all(v is not None for v in [s1, s2, s3, received_key]):
+if all([s1, s2, s3, key]):
 
-    if received_key.startswith(SECRET_KEY):
+    if key == SECRET_KEY:
         try:
             sensor1 = float(s1)
             sensor2 = float(s2)
             sensor3 = float(s3)
-
-            st.write(f"Parsed values: {sensor1}, {sensor2}, {sensor3}")  # DEBUG
 
             conn = get_connection()
 
@@ -93,13 +70,17 @@ if all(v is not None for v in [s1, s2, s3, received_key]):
                     (sensor1, sensor2, sensor3)
                 )
 
+                conn.commit()
+
+                # Show latest inserted row
+                cur.execute("SELECT * FROM sensor_db ORDER BY id DESC LIMIT 1")
+                latest = cur.fetchone()
+
+                st.success("✅ Data Saved Successfully")
+                st.write("Latest Record:", latest)
+
                 cur.close()
                 conn.close()
-
-                st.success("✅ Data Saved!")
-
-            else:
-                st.error("❌ DB connection failed")
 
         except Exception as e:
             st.error(f"❌ Insert Error: {e}")
@@ -108,11 +89,11 @@ if all(v is not None for v in [s1, s2, s3, received_key]):
         st.error("🚫 Invalid Key")
 
 else:
-    st.info("Use URL: ?s1=25&s2=60&s3=512&key=YOUR_KEY")
+    st.info("Send data using URL: ?s1=25&s2=60&s3=512&key=YOUR_KEY")
 
 
 # ====================== DASHBOARD ======================
-st.subheader("📊 Live Data")
+st.subheader("📊 Live Sensor Data")
 
 try:
     conn = get_connection()
@@ -124,26 +105,25 @@ try:
         )
         conn.close()
 
-        st.write(f"**Found {len(df)} records**")
-
         if df.empty:
-            st.warning("📭 No data yet")
+            st.warning("📭 No data available")
         else:
-            # Convert safely
-            for col in ['sensor1', 'sensor2', 'sensor3']:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+            # Convert to numeric
+            df["sensor1"] = pd.to_numeric(df["sensor1"], errors="coerce")
+            df["sensor2"] = pd.to_numeric(df["sensor2"], errors="coerce")
+            df["sensor3"] = pd.to_numeric(df["sensor3"], errors="coerce")
 
             st.dataframe(df, use_container_width=True)
 
             # Metrics
             col1, col2, col3 = st.columns(3)
 
-            col1.metric("Avg S1", f"{df['sensor1'].mean():.2f}" if df['sensor1'].notna().any() else "No data")
-            col2.metric("Avg S2", f"{df['sensor2'].mean():.2f}" if df['sensor2'].notna().any() else "No data")
-            col3.metric("Avg S3", f"{df['sensor3'].mean():.2f}" if df['sensor3'].notna().any() else "No data")
+            col1.metric("Avg Sensor 1", f"{df['sensor1'].mean():.2f}")
+            col2.metric("Avg Sensor 2", f"{df['sensor2'].mean():.2f}")
+            col3.metric("Avg Sensor 3", f"{df['sensor3'].mean():.2f}")
 
     else:
-        st.error("❌ No DB connection")
+        st.error("❌ Could not connect to DB")
 
 except Exception as e:
     st.error(f"❌ Query Error: {e}")
