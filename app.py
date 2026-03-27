@@ -24,7 +24,7 @@ def insert_sensor_values(sensor1, sensor2, sensor3):
     conn = pymysql.connect(**DB_CONFIG)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO sensor_db (sensor1, sensor2, sensor3, ttimestamp) VALUES (%s, %s, %s, %s)",
+        "INSERT INTO sensor_db (sensor1, sensor2, sensor3, timestamp) VALUES (%s, %s, %s, %s)",
         (sensor1, sensor2, sensor3, datetime.now())
     )
     conn.commit()
